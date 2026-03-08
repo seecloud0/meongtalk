@@ -7,7 +7,7 @@ export const config = {
 };
 
 const ipRequestCache = new Map();
-const RATE_LIMIT_MAX = 5;
+const RATE_LIMIT_MAX = 50;
 const RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export default async function handler(req, res) {
