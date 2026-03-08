@@ -63,9 +63,20 @@ export default async function handler(req, res) {
         const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`;
         const base64Data = imageBase64.split(',')[1] || imageBase64; // Data URL 예외 처리
 
-        // 프롬프트: 7살 꼬마 느낌
-        const prompt = "너는 이 강아지야. 7살 어린아이의 말투로, 이 사진의 상황에 대해 짧고 귀엽게 딱 한 문장(30자 이내)으로 말해줘. 존댓말을 써줘. 따옴표 없이 말해줘.";
+        // 기존 프론트엔드에서 사용하던 정밀한 프롬프트 복구
+        const prompt = `
+당신은 사진 속 귀엽고 똑똑한 7살 어린이 수준의 지능을 가진 반려견입니다.
+사진을 보고 주인에게 하고 싶은 말을 '7살 어린이의 발랄하고 매끄러운 말투'로 오직 '완벽하게 끝나는 한 문장'으로 짧게 말해주세요.
 
+[지시사항]
+1. 단어 단어 뚝뚝 끊기게 말하지 말고, 호흡이 매끄러운 한 문장으로 유창하게 말할 것.
+2. 7살 아이 특유의 순수하고 호기심 많고 통통 튀는 감성을 담아 말할 것.
+3. 쉼표(,)나 말줄임표(...) 같은 기호는 아예 사용하지 말 것.
+4. 문장이 중간에 절대 끊기지 않도록 완벽하게 의미를 맺을 것. 전체 길이는 반드시 공백 포함 **30글자 이내**로 아주 짧게 제한할 것.
+5. 앞뒤에 다른 말이나 설명 달지 말고, 대문자/소문자/따옴표 없이 대사만 적고 마지막엔 무조건 "~멍!" 으로 끝낼 것.
+
+예시:
+우아아 주인님 얼른 저랑 밖에 나가서 신나게 뛰어놀아요 멍!`;
         const geminiRes = await fetch(geminiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -80,7 +91,7 @@ export default async function handler(req, res) {
                 ],
                 generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 60,
+                    maxOutputTokens: 200, // 토큰이 부족해서 잘리는 것을 방지
                 }
             })
         });
@@ -91,12 +102,20 @@ export default async function handler(req, res) {
         }
 
         const geminiData = await geminiRes.json();
-        let generatedText = "멍멍! 나 지금 신났어요!";
+        let generatedText = "멍멍! 나 지금 신났어요 멍!";
         try {
             if (geminiData.candidates && geminiData.candidates.length > 0) {
-                generatedText = geminiData.candidates[0].content.parts[0].text.trim();
-                // 앞뒤 따옴표 제거
-                generatedText = generatedText.replace(/^["']|["']$/g, '');
+                let textResult = geminiData.candidates[0].content.parts[0].text;
+                // 앞뒤 따옴표, 불필요한 공백/줄바꿈 제거
+                textResult = textResult.replace(/[\r\n]+/g, ' ').replace(/^["']|["']$/g, '').trim();
+
+                // 생성된 대사 끝부분이 자연스럽게 안 끝났을 경우 (잘림 방어)
+                const endsWithDogSound = /멍!$|왈!$|멍\.$|왈\.$|멍\s?$|왈\s?$|여!$|요!$|다!$/.test(textResult);
+                if (!endsWithDogSound && textResult.length > 5) {
+                    textResult += "... 멍!";
+                }
+
+                generatedText = textResult;
             }
         } catch (e) {
             console.error("Gemini Parse Error:", e);
